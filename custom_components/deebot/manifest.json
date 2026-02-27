@@ -1,13 +1,11 @@
 {
   "domain": "deebot",
-  "name": "Ecovacs Deebot",
-  "version": "1.0.3",
-  "documentation": "https://www.home-assistant.io/components/ecovacs",
-  "requirements": [
-    "ozmo==1.0.4"
-  ],
+  "name": "Ecovacs Deebot Ozmo/900 (2026)",
+  "version": "1.1.0",
+  "documentation": "https://github.com/spezzuti/ecovacs-deebot-ozmo-900-2026",
+  "issue_tracker": "https://github.com/spezzuti/ecovacs-deebot-ozmo-900-2026/issues",
+  "codeowners": ["@spezzuti"],
+  "requirements": ["ozmo==1.0.4"],
   "dependencies": [],
-  "codeowners": [
-    "@nanomad"
-  ]
+  "iot_class": "cloud_polling"
 }

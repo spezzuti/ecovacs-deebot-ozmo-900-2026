@@ -10,8 +10,27 @@ from homeassistant.helpers import discovery
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components.vacuum import VacuumEntityFeature
 
-_LOGGER = logging.getLogger(__name__)
+# --- OZMO / PAHO MQTT COMPAT FIX FOR PYTHON 3.13 + PAHO 2.x ---
+try:
+    import paho.mqtt.client as mqtt
 
+    _orig_loop_start = mqtt.Client.loop_start
+
+    def _patched_loop_start(self, *args, **kwargs):
+        # paho-mqtt 2.x assumes _client_id is bytes and does .decode() for thread naming
+        try:
+            if hasattr(self, "_client_id") and isinstance(self._client_id, str):
+                self._client_id = self._client_id.encode()
+        except Exception:
+            pass
+        return _orig_loop_start(self, *args, **kwargs)
+
+    mqtt.Client.loop_start = _patched_loop_start
+
+except Exception as e:
+    logging.getLogger(__name__).warning("MQTT loop_start patch failed: %s", e)
+
+_LOGGER = logging.getLogger(__name__)
 DOMAIN = "deebot"
 
 CONF_COUNTRY = "country"
@@ -19,20 +38,18 @@ CONF_CONTINENT = "continent"
 CONF_SUPPORTED_FEATURES = "supported_features"
 CONF_UNSUPPORTED_FEATURES = "unsupported_features"
 
+# Map feature flags to strings for YAML config
 SERVICE_TO_STRING = {
     VacuumEntityFeature.START: "start",
     VacuumEntityFeature.PAUSE: "pause",
     VacuumEntityFeature.STOP: "stop",
     VacuumEntityFeature.RETURN_HOME: "return_home",
     VacuumEntityFeature.FAN_SPEED: "fan_speed",
-    VacuumEntityFeature.BATTERY: "battery",
-    VacuumEntityFeature.STATE: "state",
-    VacuumEntityFeature.STATUS: "status",
     VacuumEntityFeature.SEND_COMMAND: "send_command",
     VacuumEntityFeature.LOCATE: "locate",
     VacuumEntityFeature.CLEAN_SPOT: "clean_spot",
-    VacuumEntityFeature.TURN_ON: "turn_on",
-    VacuumEntityFeature.TURN_OFF: "turn_off"
+    # NOTE: Battery/state/status are NOT VacuumEntityFeature flags in modern HA.
+    # NOTE: turn_on/turn_off are legacy; START/STOP is the modern control surface.
 }
 
 STRING_TO_SERVICE = {v: k for k, v in SERVICE_TO_STRING.items()}
@@ -45,12 +62,12 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Required(CONF_PASSWORD): cv.string,
                 vol.Required(CONF_COUNTRY): vol.All(vol.Lower, cv.string),
                 vol.Required(CONF_CONTINENT): vol.All(vol.Lower, cv.string),
-                vol.Optional(
-                    CONF_SUPPORTED_FEATURES, default=[]
-                ): vol.All(cv.ensure_list, [vol.In(STRING_TO_SERVICE.keys())]),
-                vol.Optional(
-                    CONF_UNSUPPORTED_FEATURES, default=[]
-                ): vol.All(cv.ensure_list, [vol.In(STRING_TO_SERVICE.keys())]),
+                vol.Optional(CONF_SUPPORTED_FEATURES, default=[]): vol.All(
+                    cv.ensure_list, [vol.In(STRING_TO_SERVICE.keys())]
+                ),
+                vol.Optional(CONF_UNSUPPORTED_FEATURES, default=[]): vol.All(
+                    cv.ensure_list, [vol.In(STRING_TO_SERVICE.keys())]
+                ),
             }
         )
     },
@@ -89,8 +106,8 @@ def setup(hass, config):
     for device in devices:
         _LOGGER.info(
             "Discovered Ecovacs device on account: %s with nickname %s",
-            device["did"],
-            device["nick"],
+            device.get("did"),
+            device.get("nick"),
         )
         vacbot = VacBot(
             ecovacs_api.uid,
@@ -107,7 +124,7 @@ def setup(hass, config):
         """Shut down open connections to Ecovacs XMPP server."""
         for device in hass.data[ECOVACS_DEVICES]:
             _LOGGER.info(
-                "Shutting down connection to Ecovacs device %s", device.vacuum["did"]
+                "Shutting down connection to Ecovacs device %s", device.vacuum.get("did")
             )
             device.disconnect()
 
@@ -119,9 +136,11 @@ def setup(hass, config):
 
         dconfig = config[DOMAIN]
 
+        # Default: enable everything we know how to support
         if len(dconfig.get(CONF_SUPPORTED_FEATURES)) == 0:
-            dconfig[CONF_SUPPORTED_FEATURES] = STRING_TO_SERVICE.keys()
+            dconfig[CONF_SUPPORTED_FEATURES] = list(STRING_TO_SERVICE.keys())
 
+        # Remove any explicitly unsupported features
         if CONF_UNSUPPORTED_FEATURES in dconfig:
             filtered_features = []
             for supported_feature in dconfig.get(CONF_SUPPORTED_FEATURES):
@@ -129,23 +148,25 @@ def setup(hass, config):
                     filtered_features.append(supported_feature)
             dconfig[CONF_SUPPORTED_FEATURES] = filtered_features
 
-        _LOGGER.debug("SUPPORTED FEATURES")
-        _LOGGER.debug(dconfig.get(CONF_SUPPORTED_FEATURES))
+        _LOGGER.debug("SUPPORTED FEATURES (strings): %s", dconfig.get(CONF_SUPPORTED_FEATURES))
 
         deebot_config = {
-            CONF_SUPPORTED_FEATURES: strings_to_services(dconfig.get(CONF_SUPPORTED_FEATURES), STRING_TO_SERVICE)
+            CONF_SUPPORTED_FEATURES: strings_to_services(
+                dconfig.get(CONF_SUPPORTED_FEATURES), STRING_TO_SERVICE
+            )
         }
 
         hass.data[ECOVACS_CONFIG].append(deebot_config)
 
-        _LOGGER.debug(hass.data[ECOVACS_CONFIG])
+        _LOGGER.debug("ECOVACS_CONFIG: %s", hass.data[ECOVACS_CONFIG])
 
         discovery.load_platform(hass, "vacuum", DOMAIN, {}, config)
 
     return True
 
+
 def services_to_strings(services, service_to_string):
-    """Convert VacuumEntityFeature service bitmask to list of service strings."""
+    """Convert VacuumEntityFeature bitmask to list of service strings."""
     strings = []
     for service in service_to_string:
         if service & services:
@@ -154,7 +175,7 @@ def services_to_strings(services, service_to_string):
 
 
 def strings_to_services(strings, string_to_service):
-    """Convert service strings to VacuumEntityFeature service bitmask."""
+    """Convert service strings to VacuumEntityFeature bitmask."""
     services = 0
     for string in strings:
         services |= string_to_service[string]

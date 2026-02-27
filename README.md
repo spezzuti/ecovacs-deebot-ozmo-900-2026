@@ -1,4 +1,4 @@
-Community-maintained continuation of Ligio/hacc-ozmo for Home Assistant 2026.x
+#Community-maintained continuation of Ligio/hacc-ozmo for Home Assistant 2026.x
 Home Assistant Custom Component for Ecovacs Deebot
 
 Currently, this has been tested on the Ozmo 900 and N79

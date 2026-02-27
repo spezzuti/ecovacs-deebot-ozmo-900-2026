@@ -1,8 +1,8 @@
-#Community-maintained continuation of Ligio/hacc-ozmo for Home Assistant 2026.x
-Home Assistant Custom Component for Ecovacs Deebot
+# Ecovacs Deebot Ozmo/900 (2026)
 
-Currently, this has been tested on the Ozmo 900 and N79
+Community-maintained fork of Ligio/hacc-ozmo, updated for Home Assistant 2026.x.
 
+Tested on Ozmo 900 and N79.
 With this Home Assistant Custom Component you'll be able to 
 * play/pause/stop
 * locate

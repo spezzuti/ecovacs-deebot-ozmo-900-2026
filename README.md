@@ -97,6 +97,7 @@ vacuum_script_clean_map:
       entity_id: vacuum.<YOUR-ID>
       params:
 
+
         map: "1580.0,-4087.0,3833.0,-7525.0"  # x,y coords from your ecovacs app
 ```
 

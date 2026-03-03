@@ -7,5 +7,6 @@
   "codeowners": ["@spezzuti"],
   "requirements": ["ozmo==1.0.4"],
   "dependencies": [],
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
+  "integration_type": "hub"
 }
